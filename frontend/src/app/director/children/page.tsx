@@ -13,11 +13,11 @@ interface Child {
 }
 
 const initialChildren: Child[] = [
-  { id: '1', name: 'Amara Dlamini', dob: '2017-03-12', class: 'Busy Bee', medicalAid: 'Discovery', parentName: 'Sipho Dlamini', status: 'Pending' },
-  { id: '2', name: 'Ethan Botha', dob: '2016-11-05', class: 'Sunbeam', medicalAid: 'Momentum', parentName: 'Johann Botha', status: 'Approved' },
-  { id: '3', name: 'Lila Nkosi', dob: '2018-01-20', class: 'Little Lamb', medicalAid: 'None', parentName: 'Thandi Nkosi', status: 'Approved' },
-  { id: '4', name: 'James Patel', dob: '2016-07-08', class: 'Builder', medicalAid: 'Medshield', parentName: 'Ravi Patel', status: 'Rejected' },
-  { id: '5', name: 'Sofia van der Berg', dob: '2017-09-14', class: 'Early Bird', medicalAid: 'Bonitas', parentName: 'Mia van der Berg', status: 'Pending' },
+  { id: '1', name: 'Amara Dlamini', dob: '2019-03-12', class: 'Busy Bee', medicalAid: 'Discovery', parentName: 'Sipho Dlamini', status: 'Pending' },
+  { id: '2', name: 'Ethan Botha', dob: '2018-11-05', class: 'Sunbeam', medicalAid: 'Momentum', parentName: 'Johann Botha', status: 'Approved' },
+  { id: '3', name: 'Lila Nkosi', dob: '2020-01-20', class: 'Little Lamb', medicalAid: 'None', parentName: 'Thandi Nkosi', status: 'Approved' },
+  { id: '4', name: 'James Patel', dob: '2018-07-08', class: 'Builder', medicalAid: 'Medshield', parentName: 'Ravi Patel', status: 'Rejected' },
+  { id: '5', name: 'Sofia van der Berg', dob: '2019-09-14', class: 'Early Bird', medicalAid: 'Bonitas', parentName: 'Mia van der Berg', status: 'Pending' },
 ];
 
 const statusColors: Record<string, string> = {
