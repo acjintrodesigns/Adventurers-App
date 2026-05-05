@@ -16,8 +16,13 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Adventurers Management System",
-  description: "ACJ Intro Designs - Adventurers Club Management",
+  title: "Bassonia Adventurer Club",
+  description: "Bassonia Adventurer Club Management System",
+  icons: {
+    icon: "/adventurer-logo.png",
+    shortcut: "/adventurer-logo.png",
+    apple: "/adventurer-logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -27,7 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}>
+      <body
+        suppressHydrationWarning
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
+      >
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

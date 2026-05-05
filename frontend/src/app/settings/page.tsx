@@ -10,7 +10,6 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Settings</h1>
 
       <div className="space-y-5">
-        {/* Profile */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-700 mb-4">Profile Information</h2>
           <div className="flex items-center gap-5 mb-5">
@@ -50,7 +49,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Password */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-700 mb-4">Change Password</h2>
           <div className="space-y-3">
@@ -72,7 +70,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Notifications */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-700 mb-4">Notifications</h2>
           <div className="space-y-3">

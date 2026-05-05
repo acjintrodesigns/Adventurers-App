@@ -20,7 +20,7 @@ const initialMessages: Record<string, Message[]> = {
     { id: '3', sender: 'Mrs. Adams', role: 'Teacher', content: 'Yes, please apply sunscreen before coming. We\'ll be outside for about 2 hours.', timestamp: '09:25' },
   ],
   General: [
-    { id: '1', sender: 'Director', role: 'Director', content: 'Welcome to the Adventurers Club chat! This is the general channel for all announcements.', timestamp: '08:00' },
+    { id: '1', sender: 'Director', role: 'Director', content: 'Welcome to the Bassonia Adventurer Club chat! This is the general channel for all announcements.', timestamp: '08:00' },
     { id: '2', sender: 'Director', role: 'Director', content: 'Registration for the Investiture Ceremony is now open. Please confirm attendance by Friday.', timestamp: '08:05' },
   ],
 };

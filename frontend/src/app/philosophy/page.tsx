@@ -14,7 +14,7 @@ export default function PhilosophyPage() {
           <div className="bg-blue-50 rounded-xl p-6">
             <h2 className="text-base font-bold text-[#1e3a5f] mb-2">Philosophy</h2>
             <p className="text-gray-700 leading-relaxed">
-              The Adventurer Club meets the spiritual, physical, mental, and social needs of children in grades 1–4 (ages 6–9).
+              Bassonia Adventurer Club meets the spiritual, physical, mental, and social needs of children in grades 1–4 (ages 6–9).
               It is a ministry of the local church designed to partner with parents to nurture their children&apos;s growth.
             </p>
           </div>

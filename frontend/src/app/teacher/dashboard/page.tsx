@@ -1,6 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import Link from 'next/link';
+import { apiFetch } from '@/lib/api';
+import { deriveComplianceIssues, type ApiChild } from '@/lib/compliance';
 
 const myClasses = [
   { name: 'Busy Bee', count: 12, time: 'Sat 9:00 AM' },
@@ -20,6 +24,22 @@ const upcomingEvents = [
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
+  const [children, setChildren] = useState<ApiChild[]>([]);
+
+  useEffect(() => {
+    apiFetch('/api/children')
+      .then((data: ApiChild[]) => setChildren(data))
+      .catch(() => setChildren([]));
+  }, []);
+
+  const teacherClassNames = myClasses.map((item) => item.name);
+  const classAlerts = children
+    .filter((child) => teacherClassNames.includes(child.class))
+    .map((child) => ({
+      ...child,
+      issues: deriveComplianceIssues(child),
+    }))
+    .filter((child) => child.issues.length > 0);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -27,6 +47,37 @@ export default function TeacherDashboard() {
         <h1 className="text-2xl font-bold text-gray-800">Teacher Dashboard</h1>
         <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name ?? 'Teacher'}</p>
       </div>
+
+      {classAlerts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Class Compliance Alerts</h2>
+            <span className="text-xs font-semibold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
+              {classAlerts.length} learner{classAlerts.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {classAlerts.map((child) => (
+              <div key={child.id} className="bg-white rounded-lg border border-amber-100 p-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{child.name}</p>
+                    <p className="text-xs text-gray-400">{child.class}</p>
+                  </div>
+                  <Link href={`/teacher/children/${child.id}`} className="text-xs text-[#1e3a5f] font-semibold hover:underline whitespace-nowrap">
+                    Open Profile
+                  </Link>
+                </div>
+                <ul className="space-y-1">
+                  {child.issues.map((issue, idx) => (
+                    <li key={idx} className="text-xs text-gray-600">• {issue.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-blue-50 rounded-xl p-5 text-blue-700">

@@ -11,5 +11,8 @@ public class Payment {
     public string Type { get; set; } = ""; // Registration, Event, Donation
     public string Status { get; set; } = "Pending"; // Pending, Completed, Failed
     public string? Reference { get; set; }
+    public string? ReceiptCode { get; set; }
+    public bool IsAnonymous { get; set; } = false;
+    public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

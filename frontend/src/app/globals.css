@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'LoveYaLikeASister';
+  src: url('/fonts/LoveYaLikeASister-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-lyla {
+  font-family: 'LoveYaLikeASister', cursive;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -24,4 +36,8 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+input, textarea, select {
+  color: #111827;
 }

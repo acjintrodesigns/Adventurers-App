@@ -20,7 +20,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/register`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5009'}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -38,11 +38,9 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1e3a5f] to-[#2a5f8f]">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center text-[#1e3a5f] font-bold text-2xl mx-auto mb-3">
-            A
-          </div>
+          <img src="/logo.png" alt="Bassonia Adventurer Club Logo" className="w-24 h-auto mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-[#1e3a5f]">Create Account</h1>
-          <p className="text-gray-500 text-sm mt-1">Join the Adventurers Club</p>
+          <p className="text-gray-500 text-sm mt-1">Join Bassonia Adventurer Club</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -97,6 +95,7 @@ export default function RegisterPage() {
               <option value="Parent">Parent</option>
               <option value="Teacher">Teacher</option>
               <option value="Director">Director</option>
+              <option value="Donor">Donor</option>
             </select>
           </div>
 

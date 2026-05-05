@@ -66,7 +66,7 @@ export default function UniformPage() {
         </div>
 
         <p className="text-xs text-gray-400 text-center mt-5">
-          Uniforms should be worn to all official Adventurer Club meetings and events.
+          Uniforms should be worn to all official Bassonia Adventurer Club meetings and events.
         </p>
 
         <div className="mt-4 flex gap-3 justify-center">

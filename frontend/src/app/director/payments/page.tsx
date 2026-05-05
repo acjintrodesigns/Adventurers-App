@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 interface Payment {
   id: string;
   name: string;
@@ -8,6 +10,14 @@ interface Payment {
   date: string;
   status: 'Paid' | 'Pending' | 'Overdue';
   child?: string;
+}
+
+interface SpecialRequest {
+  donorName: string;
+  amount: number;
+  purpose: string;
+  note: string;
+  date: string;
 }
 
 const payments: Payment[] = [
@@ -32,6 +42,17 @@ const statusColors: Record<string, string> = {
 };
 
 export default function DirectorPaymentsPage() {
+  const [specialRequests, setSpecialRequests] = useState<SpecialRequest[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('donor-special-requests') ?? '[]');
+      setSpecialRequests(stored);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const totalIncome = payments.filter(p => p.status === 'Paid').reduce((sum, p) => sum + p.amount, 0);
   const outstanding = payments.filter(p => p.status !== 'Paid').reduce((sum, p) => sum + p.amount, 0);
 
@@ -89,6 +110,42 @@ export default function DirectorPaymentsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Donor Special Requests */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-gray-800">Donor Notes &amp; Special Requests</h2>
+          {specialRequests.length > 0 && (
+            <span className="bg-yellow-100 text-yellow-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {specialRequests.length}
+            </span>
+          )}
+        </div>
+        {specialRequests.length === 0 ? (
+          <p className="px-6 py-5 text-sm text-gray-400">No special requests from donors yet.</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {specialRequests.map((req, i) => (
+              <div key={i} className="px-6 py-4 flex flex-col sm:flex-row sm:items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="font-medium text-gray-800 text-sm">{req.donorName}</span>
+                    <span className="text-xs text-gray-400">·</span>
+                    <span className="text-xs font-semibold text-green-700">R{req.amount.toLocaleString()}</span>
+                    <span className="text-xs text-gray-400">·</span>
+                    <span className="text-xs text-gray-500">{req.purpose}</span>
+                    <span className="text-xs text-gray-400">·</span>
+                    <span className="text-xs text-gray-400">{new Date(req.date).toLocaleDateString('en-ZA')}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 bg-yellow-50 border border-yellow-100 rounded-lg px-3 py-2 mt-1">
+                    {req.note}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
