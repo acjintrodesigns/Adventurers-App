@@ -7,6 +7,7 @@ public class TeacherRegistration {
 
     public string FullName { get; set; } = "";
     public DateTime? DateOfBirth { get; set; }
+    public string? Gender { get; set; }
     public string DocumentType { get; set; } = "ID";
     public string? DocumentNumber { get; set; }
 

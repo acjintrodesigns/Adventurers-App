@@ -35,8 +35,23 @@ const classes = Object.keys(classAwards);
 export default function AwardsPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">Awards</h1>
-      <p className="text-gray-500 text-sm mb-6">Full color = completed · Grayscale = incomplete</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Awards</h1>
+          <p className="text-gray-500 text-sm">Full color = completed · Grayscale = incomplete</p>
+        </div>
+
+        <a
+          href="/documents/Award-Book-2020.pdf"
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-[#1e3a5f] text-white text-sm font-semibold px-4 py-2.5 rounded-lg hover:bg-[#2a4f7c] transition-colors"
+        >
+          <span aria-hidden="true">⬇</span>
+          Download Awards / Honours Guide
+        </a>
+      </div>
 
       {classes.map((cls) => (
         <div key={cls} className="mb-8">

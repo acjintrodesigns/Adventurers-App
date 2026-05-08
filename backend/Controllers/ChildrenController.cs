@@ -27,6 +27,27 @@ public class ChildrenController : ControllerBase {
     private string GetUserRole() =>
         User.FindFirstValue(ClaimTypes.Role)!;
 
+    private async Task<string?> GetAssignedClassAsync(int teacherUserId) =>
+        await _db.TeacherRegistrations
+            .AsNoTracking()
+            .Where(reg => reg.UserId == teacherUserId)
+            .Select(reg => reg.AssignedClass)
+            .FirstOrDefaultAsync();
+
+    /// <summary>
+    /// Derives gender from a South African ID number (digit at index 6: 0–4 = Female, 5–9 = Male).
+    /// Returns null if the ID is not a valid 13-digit SA ID or the document type is Passport.
+    /// </summary>
+    private static string? DeriveGenderFromId(string? documentType, string? documentNumber) {
+        if (!string.Equals(documentType, "ID", StringComparison.OrdinalIgnoreCase)) return null;
+        var digits = documentNumber?.Trim() ?? "";
+        if (digits.Length != 13 || !digits.All(char.IsDigit)) return null;
+        return int.Parse(digits[6].ToString()) >= 5 ? "Male" : "Female";
+    }
+
+    private static string? ResolveGender(Child c) =>
+        string.IsNullOrWhiteSpace(c.Gender) ? DeriveGenderFromId(c.DocumentType, c.DocumentNumber) : c.Gender;
+
     private static List<string> BuildComplianceIssues(Child c) {
         var issues = new List<string>();
 
@@ -47,7 +68,7 @@ public class ChildrenController : ControllerBase {
     }
 
     // GET /api/children
-    // Directors/Teachers see all children; Parents see only their own.
+    // Directors see all children, parents see their own, teachers only their assigned class.
     [HttpGet]
     public async Task<IActionResult> GetChildren() {
         var role = GetUserRole();
@@ -57,6 +78,12 @@ public class ChildrenController : ControllerBase {
 
         if (role == "Parent")
             query = query.Where(c => c.ParentId == userId);
+        else if (role == "Teacher") {
+            var assignedClass = await GetAssignedClassAsync(userId);
+            if (string.IsNullOrWhiteSpace(assignedClass))
+                return Ok(Array.Empty<object>());
+            query = query.Where(c => c.Class == assignedClass);
+        }
 
         var children = await query
             .OrderByDescending(c => c.CreatedAt)
@@ -79,7 +106,7 @@ public class ChildrenController : ControllerBase {
             .ToDictionary(group => group.Key, group => group.Select(MapDemeritRecord).ToList());
 
         var childrenWithCompliance = children.Select(c => new {
-            c.Id, c.Name, c.DateOfBirth, c.PhotoUrl,
+            c.Id, c.Name, c.DateOfBirth, Gender = ResolveGender(c), c.PhotoUrl,
             c.DocumentType, c.DocumentNumber,
             c.MedicalAidInfo, c.Class, c.Status, c.AdventurerCode,
             c.IndemnitySigned, c.IndemnitySignedAt, c.IndemnitySignedByName,
@@ -104,11 +131,14 @@ public class ChildrenController : ControllerBase {
         if (string.IsNullOrWhiteSpace(dto.DocumentNumber))
             return BadRequest(new { message = "Document number is required." });
 
+        var resolvedDocType = normalizedType == "PASSPORT" ? "Passport" : "ID";
+        var resolvedDocNumber = dto.DocumentNumber.Trim();
         var child = new Child {
             Name = dto.Name,
             DateOfBirth = dto.DateOfBirth,
-            DocumentType = normalizedType == "PASSPORT" ? "Passport" : "ID",
-            DocumentNumber = dto.DocumentNumber.Trim(),
+            Gender = DeriveGenderFromId(resolvedDocType, resolvedDocNumber) ?? dto.Gender?.Trim(),
+            DocumentType = resolvedDocType,
+            DocumentNumber = resolvedDocNumber,
             Class = dto.Class,
             MedicalAidInfo = dto.MedicalAidInfo,
             PhotoUrl = dto.PhotoUrl,
@@ -133,6 +163,11 @@ public class ChildrenController : ControllerBase {
 
         if (role == "Parent" && child.ParentId != userId)
             return Forbid();
+        if (role == "Teacher") {
+            var assignedClass = await GetAssignedClassAsync(userId);
+            if (string.IsNullOrWhiteSpace(assignedClass) || child.Class != assignedClass)
+                return Forbid();
+        }
 
         var summary = await _demeritService.RefreshChildAsync(child);
         var demeritHistory = await _db.DemeritRecords
@@ -144,7 +179,7 @@ public class ChildrenController : ControllerBase {
             .ToListAsync();
 
         return Ok(new {
-            child.Id, child.Name, child.DateOfBirth, child.PhotoUrl,
+            child.Id, child.Name, child.DateOfBirth, Gender = ResolveGender(child), child.PhotoUrl,
             child.DocumentType, child.DocumentNumber,
             child.MedicalAidInfo, child.Class, child.Status, child.AdventurerCode,
             child.IndemnitySigned, child.IndemnitySignedAt, child.IndemnitySignedByName,
@@ -166,7 +201,7 @@ public class ChildrenController : ControllerBase {
 
     // PUT /api/children/{id}/indemnity
     [HttpPut("{id}/indemnity")]
-    [Authorize(Roles = "Parent,Director")]
+    [Authorize(Roles = "Parent")]
     public async Task<IActionResult> UpdateIndemnity(int id, UpdateChildIndemnityDto dto) {
         if (string.IsNullOrWhiteSpace(dto.FullName))
             return BadRequest(new { message = "Full name is required." });
@@ -180,9 +215,8 @@ public class ChildrenController : ControllerBase {
         var child = await _db.Children.FindAsync(id);
         if (child == null) return NotFound();
 
-        var role = GetUserRole();
         var userId = GetUserId();
-        if (role == "Parent" && child.ParentId != userId)
+        if (child.ParentId != userId)
             return Forbid();
 
         child.IndemnitySigned = true;
@@ -202,6 +236,31 @@ public class ChildrenController : ControllerBase {
         });
     }
 
+    // PUT /api/children/{id}/indemnity/save — saves signature drawing without formally signing
+    [HttpPut("{id}/indemnity/save")]
+    [Authorize(Roles = "Parent")]
+    public async Task<IActionResult> SaveIndemnitySignature(int id, SaveIndemnitySignatureDto dto) {
+        if (string.IsNullOrWhiteSpace(dto.SignatureDataUrl))
+            return BadRequest(new { message = "Signature is required." });
+
+        var child = await _db.Children.FindAsync(id);
+        if (child == null) return NotFound();
+
+        var userId = GetUserId();
+        if (child.ParentId != userId)
+            return Forbid();
+
+        // Save signature and optional name/relationship without marking as signed
+        child.IndemnitySignatureDataUrl = dto.SignatureDataUrl;
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+            child.IndemnitySignedByName = dto.FullName.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.Relationship))
+            child.IndemnitySignerRelationship = dto.Relationship.Trim();
+
+        await _db.SaveChangesAsync();
+        return Ok(new { saved = true });
+    }
+
     // PUT /api/children/{id}/status
     [HttpPut("{id}/status")]
     [Authorize(Roles = "Director,Teacher")]
@@ -212,6 +271,12 @@ public class ChildrenController : ControllerBase {
 
         var child = await _db.Children.FindAsync(id);
         if (child == null) return NotFound();
+
+        if (GetUserRole() == "Teacher") {
+            var assignedClass = await GetAssignedClassAsync(GetUserId());
+            if (string.IsNullOrWhiteSpace(assignedClass) || child.Class != assignedClass)
+                return Forbid();
+        }
 
         child.Status = dto.Status;
         await _db.SaveChangesAsync();

@@ -33,7 +33,7 @@ public class AnnouncementsController : ControllerBase {
             .OrderByDescending(a => a.CreatedAt)
             .Select(a => new {
                 a.Id, a.Title, a.Body,
-                a.AuthorId, AuthorName = a.Author!.Name,
+                a.AuthorId, AuthorName = a.Author!.Name, AuthorRole = a.Author!.Role,
                 a.TargetClass, a.CreatedAt
             })
             .ToListAsync();
@@ -57,5 +57,38 @@ public class AnnouncementsController : ControllerBase {
             announcement.Id, announcement.Title, announcement.Body,
             announcement.AuthorId, announcement.TargetClass, announcement.CreatedAt
         });
+    }
+
+    // DELETE /api/announcements/{id}
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Director,Teacher")]
+    public async Task<IActionResult> DeleteAnnouncement(int id) {
+        var announcement = await _db.Announcements.FindAsync(id);
+        if (announcement == null) return NotFound();
+
+        var userId = GetUserId();
+        var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+        var isDirector = string.Equals(role, "Director", StringComparison.OrdinalIgnoreCase);
+
+        // Teachers can only delete their own announcements; directors can delete any.
+        if (!isDirector && announcement.AuthorId != userId)
+            return Forbid();
+
+        _db.Announcements.Remove(announcement);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // DELETE /api/announcements
+    [HttpDelete]
+    [Authorize(Roles = "Director")]
+    public async Task<IActionResult> ClearAnnouncements() {
+        var existing = await _db.Announcements.ToListAsync();
+        if (existing.Count == 0)
+            return Ok(new { deleted = 0 });
+
+        _db.Announcements.RemoveRange(existing);
+        await _db.SaveChangesAsync();
+        return Ok(new { deleted = existing.Count });
     }
 }

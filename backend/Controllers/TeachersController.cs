@@ -22,6 +22,53 @@ public class TeachersController : ControllerBase {
 
     private string GetUserRole() => User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
+    private static bool TryDeriveFromSouthAfricanId(string idNumber, out DateTime dateOfBirth, out string gender) {
+        dateOfBirth = default;
+        gender = string.Empty;
+
+        var digits = new string((idNumber ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length != 13) return false;
+
+        if (!int.TryParse(digits.Substring(0, 2), out var year) ||
+            !int.TryParse(digits.Substring(2, 2), out var month) ||
+            !int.TryParse(digits.Substring(4, 2), out var day)) {
+            return false;
+        }
+
+        var currentYY = DateTime.UtcNow.Year % 100;
+        var fullYear = year <= currentYY ? 2000 + year : 1900 + year;
+        if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+
+        try {
+            var candidateDob = new DateTime(fullYear, month, day);
+            if (candidateDob.Month != month || candidateDob.Day != day) return false;
+            dateOfBirth = candidateDob;
+        } catch {
+            return false;
+        }
+
+        // Luhn checksum validation
+        var sum = 0;
+        for (var i = 0; i < 12; i++) {
+            if (!int.TryParse(digits[i].ToString(), out var n)) return false;
+            if (i % 2 == 0) {
+                sum += n;
+            } else {
+                var doubled = n * 2;
+                sum += doubled > 9 ? doubled - 9 : doubled;
+            }
+        }
+
+        var checkDigit = (10 - (sum % 10)) % 10;
+        if (!int.TryParse(digits[12].ToString(), out var providedCheck) || checkDigit != providedCheck)
+            return false;
+
+        if (!int.TryParse(digits[6].ToString(), out var genderDigit)) return false;
+        gender = genderDigit >= 5 ? "Male" : "Female";
+
+        return true;
+    }
+
     [HttpGet]
     [Authorize(Roles = "Director")]
     public async Task<IActionResult> GetTeachers() {
@@ -36,6 +83,7 @@ public class TeachersController : ControllerBase {
                 Role = reg.User != null ? reg.User.Role : null,
                 reg.FullName,
                 reg.DateOfBirth,
+                reg.Gender,
                 reg.DocumentType,
                 reg.DocumentNumber,
                 reg.Phone,
@@ -85,6 +133,24 @@ public class TeachersController : ControllerBase {
         if (normalizedType is not ("ID" or "PASSPORT"))
             return BadRequest(new { message = "Document type must be ID or Passport." });
 
+        var normalizedDocumentNumber = string.IsNullOrWhiteSpace(dto.DocumentNumber)
+            ? null
+            : new string(dto.DocumentNumber.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+
+        if (normalizedType == "ID") {
+            if (string.IsNullOrWhiteSpace(normalizedDocumentNumber))
+                return BadRequest(new { message = "ID number is required." });
+
+            if (!TryDeriveFromSouthAfricanId(normalizedDocumentNumber, out var derivedDob, out var derivedGender))
+                return BadRequest(new { message = "Invalid South African ID number." });
+
+            dto = dto with {
+                DateOfBirth = derivedDob,
+                Gender = derivedGender,
+                DocumentNumber = normalizedDocumentNumber,
+            };
+        }
+
         var registration = await _db.TeacherRegistrations.FirstOrDefaultAsync(reg => reg.UserId == userId);
         if (registration == null) {
             registration = new TeacherRegistration {
@@ -96,8 +162,9 @@ public class TeachersController : ControllerBase {
 
         registration.FullName = dto.FullName.Trim();
         registration.DateOfBirth = dto.DateOfBirth;
+        registration.Gender = string.IsNullOrWhiteSpace(dto.Gender) ? null : dto.Gender.Trim();
         registration.DocumentType = normalizedType == "PASSPORT" ? "Passport" : "ID";
-        registration.DocumentNumber = string.IsNullOrWhiteSpace(dto.DocumentNumber) ? null : dto.DocumentNumber.Trim();
+        registration.DocumentNumber = normalizedDocumentNumber;
         registration.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
         registration.Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim();
         registration.EmergencyContactName = string.IsNullOrWhiteSpace(dto.EmergencyContactName) ? null : dto.EmergencyContactName.Trim();
@@ -168,6 +235,25 @@ public class TeachersController : ControllerBase {
         return Ok(new { registration.Id, registration.Status });
     }
 
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Director")]
+    public async Task<IActionResult> DeleteTeacher(int id) {
+        var registration = await _db.TeacherRegistrations
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (registration == null)
+            return NotFound(new { message = "Teacher not found." });
+
+        var user = registration.User;
+        _db.TeacherRegistrations.Remove(registration);
+        if (user != null)
+            _db.Users.Remove(user);
+
+        await _db.SaveChangesAsync();
+        return Ok(new { message = "Teacher deleted." });
+    }
+
     [HttpGet("my-class")]
     [Authorize(Roles = "Teacher")]
     public async Task<IActionResult> GetMyAssignedClass() {
@@ -186,6 +272,7 @@ public class TeachersController : ControllerBase {
         registration.UserId,
         registration.FullName,
         registration.DateOfBirth,
+        registration.Gender,
         registration.DocumentType,
         registration.DocumentNumber,
         registration.Phone,

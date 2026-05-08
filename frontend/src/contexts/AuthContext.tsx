@@ -89,6 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string, role: UserRole) => {
+    const isDemoEmail = email.startsWith('demo.') && email.endsWith('@adventurers.local');
+
     try {
       const res = await fetchWithTimeout(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5009'}/api/auth/login`, {
         method: 'POST',
@@ -97,14 +99,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        // For demo/dev: use mock login
-        const mockUser: AuthUser = { id: '1', name: 'Demo User', email, role };
-        persistToken('mock-token');
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        setToken('mock-token');
-        router.push(`/${role.toLowerCase()}/dashboard`);
-        return;
+        if (isDemoEmail) {
+          // Demo account — fall through to mock login below
+          throw new Error('__demo__');
+        }
+        const body = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(body.message ?? 'Invalid email or password.');
       }
 
       const data = await res.json();
@@ -120,14 +120,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(mappedUser);
       setToken(data.token);
       router.push(`/${mappedUser.role.toLowerCase()}/dashboard`);
-    } catch {
-      // Fallback mock login for development
-      const mockUser: AuthUser = { id: '1', name: 'Demo User', email, role };
-      persistToken('mock-token');
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      setUser(mockUser);
-      setToken('mock-token');
-      router.push(`/${role.toLowerCase()}/dashboard`);
+    } catch (err) {
+      const isDemoFallback = err instanceof Error && err.message === '__demo__';
+      const isNetworkError = err instanceof Error && err.name === 'AbortError';
+
+      if (isDemoFallback || (isDemoEmail && isNetworkError)) {
+        // Offline / demo mode — use mock login only for demo accounts
+        const mockUser: AuthUser = { id: '1', name: 'Demo User', email, role };
+        persistToken('mock-token');
+        localStorage.setItem('user', JSON.stringify(mockUser));
+        setUser(mockUser);
+        setToken('mock-token');
+        router.push(`/${role.toLowerCase()}/dashboard`);
+        return;
+      }
+
+      // Re-throw for real users so the login page can display the error
+      throw err;
     }
   };
 

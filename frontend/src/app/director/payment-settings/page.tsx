@@ -4,12 +4,6 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 
 interface DirectorPaymentSettings {
-  studentRegistrationFeePrice: number;
-  teachersRegistrationFeePrice: number;
-  workCommencmentDate: string;
-  workCompletionDate: string;
-  completionConfirmationDate: string;
-  investigerDate: string;
   bankName: string;
   accountName: string;
   accountNumber: string;
@@ -26,12 +20,6 @@ interface DirectorPaymentSettings {
 export default function DirectorPaymentSettingsPage() {
   const isDemoSession = typeof window !== 'undefined' && localStorage.getItem('token') === 'mock-token';
   const [settings, setSettings] = useState<DirectorPaymentSettings>({
-    studentRegistrationFeePrice: 450,
-    teachersRegistrationFeePrice: 450,
-    workCommencmentDate: '',
-    workCompletionDate: '',
-    completionConfirmationDate: '',
-    investigerDate: '',
     bankName: 'First National Bank',
     accountName: 'Bassonia Adventurer Club',
     accountNumber: 'XXXX XXXX XXXX',
@@ -57,12 +45,6 @@ export default function DirectorPaymentSettingsPage() {
         setSettingsError(null);
         const data = await apiFetch('/api/payment-settings/admin');
         setSettings({
-          studentRegistrationFeePrice: Number(data.studentRegistrationFeePrice ?? 450),
-          teachersRegistrationFeePrice: Number(data.teachersRegistrationFeePrice ?? 450),
-          workCommencmentDate: data.workCommencmentDate ? String(data.workCommencmentDate).slice(0, 10) : '',
-          workCompletionDate: data.workCompletionDate ? String(data.workCompletionDate).slice(0, 10) : '',
-          completionConfirmationDate: data.completionConfirmationDate ? String(data.completionConfirmationDate).slice(0, 10) : '',
-          investigerDate: data.investigerDate ? String(data.investigerDate).slice(0, 10) : '',
           bankName: data.bankName ?? '',
           accountName: data.accountName ?? '',
           accountNumber: data.accountNumber ?? '',
@@ -105,12 +87,6 @@ export default function DirectorPaymentSettingsPage() {
         method: 'PUT',
         body: JSON.stringify({
           ...settings,
-          studentRegistrationFeePrice: Number(settings.studentRegistrationFeePrice),
-          teachersRegistrationFeePrice: Number(settings.teachersRegistrationFeePrice),
-          workCommencmentDate: settings.workCommencmentDate || null,
-          workCompletionDate: settings.workCompletionDate || null,
-          completionConfirmationDate: settings.completionConfirmationDate || null,
-          investigerDate: settings.investigerDate || null,
         }),
       });
 
@@ -126,7 +102,7 @@ export default function DirectorPaymentSettingsPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-800 mb-2">Director Payment Settings</h1>
       <p className="text-sm text-gray-600 mb-6">
-        Configure pricing.costs, learning timeline dates, and payment channel details used throughout the platform.
+        Configure bank account details and PayFast gateway credentials used for online payments.
       </p>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -139,73 +115,7 @@ export default function DirectorPaymentSettingsPage() {
         {settingsError && <p className="text-sm text-red-600 mb-3">{settingsError}</p>}
         {settingsMessage && <p className="text-sm text-green-600 mb-3">{settingsMessage}</p>}
 
-        <h2 className="text-base font-semibold text-gray-700 mb-4">Pricing.Costs</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Student registration fee price</label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={settings.studentRegistrationFeePrice}
-              onChange={(e) => updateSetting('studentRegistrationFeePrice', Number(e.target.value || 0))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teachers registration fee price</label>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={settings.teachersRegistrationFeePrice}
-              onChange={(e) => updateSetting('teachersRegistrationFeePrice', Number(e.target.value || 0))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-        </div>
-
-        <h2 className="text-base font-semibold text-gray-700 mt-6 mb-4">Learning Timeline</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">work commencment date</label>
-            <input
-              type="date"
-              value={settings.workCommencmentDate}
-              onChange={(e) => updateSetting('workCommencmentDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">work completion date</label>
-            <input
-              type="date"
-              value={settings.workCompletionDate}
-              onChange={(e) => updateSetting('workCompletionDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Completion confirmation date</label>
-            <input
-              type="date"
-              value={settings.completionConfirmationDate}
-              onChange={(e) => updateSetting('completionConfirmationDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">investiger date</label>
-            <input
-              type="date"
-              value={settings.investigerDate}
-              onChange={(e) => updateSetting('investigerDate', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
-            />
-          </div>
-        </div>
-
-        <h2 className="text-base font-semibold text-gray-700 mt-6 mb-4">Bank Details</h2>
+        <h2 className="text-base font-semibold text-gray-700 mb-4">Bank Details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>

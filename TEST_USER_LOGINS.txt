@@ -1,0 +1,46 @@
+Adventurers App - Test Login Details
+Generated: 2026-05-06
+Source: backend/adventurers.db (Users table)
+
+NOTE
+- This file is for local testing only.
+- Passwords cannot be read from the database because they are stored as BCrypt hashes.
+- "Known" passwords below are based on seeded/test accounts used during development.
+
+Known Working Credentials
+1) Director
+   Name: Director Admin
+   Email: director@adventurers.com
+   Role: Director
+   Password: Director@123
+
+2) Parent
+   Name: Angelo Tyrone Hedley
+   Email: parent@adventurers.com
+   Role: Parent
+   Password: Parent@123
+
+3) Teacher
+   Name: Sarah Johnson
+   Email: teacher1@adventurers.com
+   Role: Teacher
+   Password: Teacher@123
+
+4) Parent (test account)
+   Name: Angela Mokoena
+   Email: testparent99@test.com
+   Role: Parent
+   Password: Test1234!
+
+Users Present In DB (Password Unknown)
+5) Teacher
+   Name: Angelo Tyrone Hedley
+   Email: angelo@hedley.co.za
+   Role: Teacher
+   Password: UNKNOWN (set during registration)
+
+6) Teacher
+   Name: Teacher Runtime
+   Email: teacher.1777969967@adventurers.com
+   Role: Teacher
+   Password: UNKNOWN (set during registration)

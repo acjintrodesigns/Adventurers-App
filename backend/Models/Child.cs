@@ -3,6 +3,7 @@ public class Child {
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public DateTime DateOfBirth { get; set; }
+    public string? Gender { get; set; } // "Male" or "Female"
     public string DocumentType { get; set; } = "ID";
     public string DocumentNumber { get; set; } = "";
     public string? PhotoUrl { get; set; }

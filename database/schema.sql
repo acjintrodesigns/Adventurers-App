@@ -52,6 +52,32 @@ CREATE TABLE ProgressItems (
     CONSTRAINT UQ_ChildRequirement UNIQUE (ChildId, Category, RequirementName)
 );
 
+-- BookWorkProgressItems table
+CREATE TABLE BookWorkProgressItems (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    ChildId INT NOT NULL REFERENCES Children(Id),
+    Category NVARCHAR(100) NOT NULL,
+    RequirementName NVARCHAR(300) NOT NULL,
+    IsCompleted BIT NOT NULL DEFAULT 0,
+    ProofImageUrl NVARCHAR(MAX),
+    TeacherId INT REFERENCES Users(Id),
+    CompletedAt DATETIME2,
+    CONSTRAINT UQ_BookWork_ChildRequirement UNIQUE (ChildId, Category, RequirementName)
+);
+
+-- HonorProgressItems table
+CREATE TABLE HonorProgressItems (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    ChildId INT NOT NULL REFERENCES Children(Id),
+    Category NVARCHAR(100) NOT NULL,
+    HonorName NVARCHAR(300) NOT NULL,
+    IsCompleted BIT NOT NULL DEFAULT 0,
+    ProofImageUrl NVARCHAR(MAX),
+    TeacherId INT REFERENCES Users(Id),
+    CompletedAt DATETIME2,
+    CONSTRAINT UQ_Honor_ChildRequirement UNIQUE (ChildId, Category, HonorName)
+);
+
 -- Events table
 CREATE TABLE Events (
     Id INT IDENTITY(1,1) PRIMARY KEY,
@@ -139,6 +165,8 @@ CREATE INDEX IX_Children_ParentId ON Children(ParentId);
 CREATE INDEX IX_Children_Status ON Children(Status);
 CREATE UNIQUE INDEX IX_Children_AdventurerCode_Unique ON Children(AdventurerCode) WHERE AdventurerCode IS NOT NULL;
 CREATE INDEX IX_ProgressItems_ChildId ON ProgressItems(ChildId);
+CREATE INDEX IX_BookWorkProgressItems_ChildId ON BookWorkProgressItems(ChildId);
+CREATE INDEX IX_HonorProgressItems_ChildId ON HonorProgressItems(ChildId);
 CREATE UNIQUE INDEX IX_Events_EventCode_Unique ON Events(EventCode) WHERE EventCode IS NOT NULL;
 CREATE INDEX IX_Payments_UserId ON Payments(UserId);
 CREATE INDEX IX_DemeritRecords_ChildId_Status ON DemeritRecords(ChildId, Status, ExpiresAt);

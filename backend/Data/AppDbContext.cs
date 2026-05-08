@@ -8,12 +8,15 @@ public class AppDbContext : DbContext {
     public DbSet<Child> Children { get; set; }
     public DbSet<DemeritRecord> DemeritRecords { get; set; }
     public DbSet<ProgressItem> ProgressItems { get; set; }
+    public DbSet<BookWorkProgressItem> BookWorkProgressItems { get; set; }
+    public DbSet<HonorProgressItem> HonorProgressItems { get; set; }
     public DbSet<Event> Events { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<PaymentSettings> PaymentSettings { get; set; }
     public DbSet<TeacherRegistration> TeacherRegistrations { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<Announcement> Announcements { get; set; }
+    public DbSet<LockedTopic> LockedTopics { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) {
         base.OnModelCreating(modelBuilder);
@@ -68,6 +71,18 @@ public class AppDbContext : DbContext {
 
         modelBuilder.Entity<TeacherRegistration>()
             .HasIndex(registration => registration.UserId)
+            .IsUnique();
+
+        modelBuilder.Entity<BookWorkProgressItem>()
+            .HasIndex(item => new { item.ChildId, item.Category, item.RequirementName })
+            .IsUnique();
+
+        modelBuilder.Entity<HonorProgressItem>()
+            .HasIndex(item => new { item.ChildId, item.Category, item.HonorName })
+            .IsUnique();
+
+        modelBuilder.Entity<LockedTopic>()
+            .HasIndex(t => new { t.ChildId, t.Section })
             .IsUnique();
     }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +13,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   const showSidebar = user && !noSidebarPaths.includes(pathname);
   const showFloatingChat = showSidebar && pathname !== '/chat' && user?.role !== 'Donor';
@@ -35,11 +36,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         mobileOpen={mobileMenuOpen}
-        onCloseMobile={() => setMobileMenuOpen(false)}
+        onCloseMobile={closeMobileMenu}
       />
-      <main className="flex-1 min-w-0 overflow-auto">
+      <main className="flex-1 min-w-0 overflow-auto pb-20 md:pb-0">
         <div className="md:hidden sticky top-0 z-40 bg-[#1e3a5f] text-white px-4 py-3 shadow-sm">
           <div className="flex items-center justify-between">
+            <div className="w-10" />
+            <p className="text-sm font-semibold truncate px-3">Bassonia Adventurer Club</p>
             <button
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Open menu"
@@ -49,8 +52,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="block w-4 h-0.5 bg-white rounded" />
               <span className="block w-4 h-0.5 bg-white rounded" />
             </button>
-            <p className="text-sm font-semibold truncate px-3">Bassonia Adventurer Club</p>
-            <div className="w-10" />
           </div>
         </div>
         {children}
@@ -58,17 +59,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {showFloatingChat && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-50">
           <Link
             href="/chat"
             aria-label="Open chat"
             title="Open chat"
-            className="relative block h-14 w-14 rounded-full border-2 border-white bg-[#1e3a5f] shadow-xl hover:scale-105 transition-transform flex items-center justify-center"
+            className="relative block h-12 w-12 md:h-14 md:w-14 rounded-full border-2 border-white bg-[#1e3a5f] shadow-xl hover:scale-105 transition-transform flex items-center justify-center"
           >
             <img
               src="/logo.png"
               alt="Adventurer badge"
-              className="h-10 w-10 rounded-full object-cover"
+              className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover"
             />
             {/* Speech-bubble tail — CSS triangle pointing bottom-right */}
             <span aria-hidden="true" style={{ position:'absolute', bottom:'-11px', right:'6px', width:0, height:0, borderTop:'11px solid white', borderLeft:'11px solid transparent' }} />

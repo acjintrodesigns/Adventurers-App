@@ -1,47 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api';
 
 interface Announcement {
-  id: string;
+  id: number;
   title: string;
   content: string;
   author: string;
+  authorId?: number;
   role: string;
   date: string;
   targetClass?: string;
 }
 
-const initialAnnouncements: Announcement[] = [
-  {
-    id: '1',
-    title: 'Investiture Ceremony – Save the Date',
-    content: 'The annual Investiture Ceremony will be held on February 3rd, 2024, at 3 PM in the Main Auditorium. All parents and children are invited to attend.',
-    author: 'Director',
-    role: 'Director',
-    date: '2024-01-15',
-    targetClass: 'All',
-  },
-  {
-    id: '2',
-    title: 'Camp Out Registration Open',
-    content: 'Registration for the March Camp Out is now open. Limited spots available. Cost: R200 per child. Please register by February 28th.',
-    author: 'Mrs. Adams',
-    role: 'Teacher',
-    date: '2024-01-14',
-    targetClass: 'Busy Bee',
-  },
-  {
-    id: '3',
-    title: 'Memory Verse Update',
-    content: 'This week\'s memory verse is Psalm 23:1 – "The Lord is my shepherd; I shall not want." Please practice at home!',
-    author: 'Mr. Johnson',
-    role: 'Teacher',
-    date: '2024-01-13',
-    targetClass: 'Early Bird',
-  },
-];
+interface ApiAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  authorId?: number;
+  authorName?: string;
+  authorRole?: string;
+  targetClass?: string | null;
+  createdAt: string;
+}
 
 const roleColors: Record<string, string> = {
   Director: 'bg-purple-100 text-purple-700',
@@ -49,42 +32,127 @@ const roleColors: Record<string, string> = {
 };
 
 export default function AnnouncementsPage() {
-  const { role } = useAuth();
-  const [announcements, setAnnouncements] = useState<Announcement[]>(initialAnnouncements);
+  const { role, user } = useAuth();
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', targetClass: 'All' });
-  const { user } = useAuth();
 
   const canCreate = role === 'Director' || role === 'Teacher';
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newAnn: Announcement = {
-      id: Date.now().toString(),
-      title: form.title,
-      content: form.content,
-      author: user?.name ?? 'Unknown',
-      role: role ?? 'Teacher',
-      date: new Date().toISOString().split('T')[0],
-      targetClass: form.targetClass,
+  const mapApiAnnouncement = (item: ApiAnnouncement): Announcement => ({
+    id: item.id,
+    title: item.title,
+    content: item.body,
+    author: item.authorName || 'Staff',
+    authorId: item.authorId,
+    role: item.authorRole || 'Staff',
+    date: new Date(item.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }),
+    targetClass: item.targetClass ?? 'All',
+  });
+
+  const canDeleteAnnouncement = (announcement: Announcement) => {
+    if (role === 'Director') return true;
+    if (role !== 'Teacher') return false;
+    return Number(user?.id ?? '0') === Number(announcement.authorId ?? 0);
+  };
+
+  useEffect(() => {
+    const loadAnnouncements = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await apiFetch('/api/announcements') as ApiAnnouncement[];
+        setAnnouncements(Array.isArray(data) ? data.map(mapApiAnnouncement) : []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load announcements.');
+      } finally {
+        setLoading(false);
+      }
     };
-    setAnnouncements((prev) => [newAnn, ...prev]);
-    setForm({ title: '', content: '', targetClass: 'All' });
-    setShowForm(false);
+
+    void loadAnnouncements();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const created = await apiFetch('/api/announcements', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: form.title.trim(),
+          body: form.content.trim(),
+          targetClass: form.targetClass === 'All' ? null : form.targetClass,
+        }),
+      }) as ApiAnnouncement;
+
+      const newAnn = mapApiAnnouncement(created);
+      setAnnouncements((prev) => [newAnn, ...prev]);
+      setForm({ title: '', content: '', targetClass: 'All' });
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to publish announcement.');
+    }
+  };
+
+  const handleDelete = async (announcement: Announcement) => {
+    const confirmed = confirm(`Are you sure you want to delete "${announcement.title}"?`);
+    if (!confirmed) return;
+
+    setError(null);
+    setDeletingId(announcement.id);
+    try {
+      await apiFetch(`/api/announcements/${announcement.id}`, { method: 'DELETE' });
+      setAnnouncements((prev) => prev.filter((ann) => ann.id !== announcement.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete announcement.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (role !== 'Director') return;
+    setError(null);
+    setClearingAll(true);
+    try {
+      await apiFetch('/api/announcements', { method: 'DELETE' });
+      setAnnouncements([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear announcements.');
+    } finally {
+      setClearingAll(false);
+    }
   };
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Announcements</h1>
-        {canCreate && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-[#1e3a5f] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[#2a4f7c]"
-          >
-            {showForm ? 'Cancel' : '+ New Announcement'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {role === 'Director' && (
+            <button
+              type="button"
+              onClick={() => void handleClearAll()}
+              disabled={clearingAll || announcements.length === 0}
+              className="border border-red-200 text-red-700 bg-red-50 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {clearingAll ? 'Clearing...' : 'Clear All'}
+            </button>
+          )}
+          {canCreate && (
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="bg-[#1e3a5f] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[#2a4f7c]"
+            >
+              {showForm ? 'Cancel' : '+ New Announcement'}
+            </button>
+          )}
+        </div>
       </div>
 
       {showForm && canCreate && (
@@ -134,16 +202,47 @@ export default function AnnouncementsPage() {
         </div>
       )}
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-4">
-        {announcements.map((ann) => (
+        {loading && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-sm text-gray-500">
+            Loading announcements...
+          </div>
+        )}
+
+        {!loading && announcements.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-dashed border-gray-200 p-8 text-center">
+            <p className="text-sm font-semibold text-gray-600">No announcements yet</p>
+            <p className="text-xs text-gray-400 mt-1">Create the first announcement to begin testing.</p>
+          </div>
+        )}
+
+        {!loading && announcements.map((ann) => (
           <div key={ann.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-start justify-between gap-4 mb-3">
               <h3 className="text-base font-bold text-gray-800">{ann.title}</h3>
-              {ann.targetClass && (
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex-shrink-0">
-                  {ann.targetClass}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {ann.targetClass && (
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex-shrink-0">
+                    {ann.targetClass}
+                  </span>
+                )}
+                {canDeleteAnnouncement(ann) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(ann)}
+                    disabled={deletingId === ann.id}
+                    className="text-xs text-red-600 hover:text-red-700 font-semibold px-2 py-1 rounded border border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === ann.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed mb-3">{ann.content}</p>
             <div className="flex items-center gap-2 text-xs text-gray-400">

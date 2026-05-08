@@ -299,6 +299,8 @@ END";
         if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite") {
             try { db.Database.ExecuteSqlRaw("ALTER TABLE Users ADD COLUMN SecondaryGuardianJson TEXT NULL"); } catch { /* column already exists */ }
             try { db.Database.ExecuteSqlRaw("ALTER TABLE Users ADD COLUMN PhotoUrl TEXT NULL"); } catch { /* column already exists */ }
+            try { db.Database.ExecuteSqlRaw("ALTER TABLE Children ADD COLUMN Gender TEXT NULL"); } catch { /* column already exists */ }
+            try { db.Database.ExecuteSqlRaw("ALTER TABLE TeacherRegistrations ADD COLUMN Gender TEXT NULL"); } catch { /* column already exists */ }
 
             try { db.Database.ExecuteSqlRaw("ALTER TABLE PaymentSettings ADD COLUMN StudentRegistrationFeePrice REAL NOT NULL DEFAULT 450"); } catch { /* column already exists */ }
             try { db.Database.ExecuteSqlRaw("ALTER TABLE PaymentSettings ADD COLUMN TeachersRegistrationFeePrice REAL NOT NULL DEFAULT 450"); } catch { /* column already exists */ }
@@ -313,6 +315,7 @@ CREATE TABLE IF NOT EXISTS TeacherRegistrations (
     UserId INTEGER NOT NULL,
     FullName TEXT NOT NULL,
     DateOfBirth TEXT NULL,
+    Gender TEXT NULL,
     DocumentType TEXT NOT NULL DEFAULT 'ID',
     DocumentNumber TEXT NULL,
     Phone TEXT NULL,
@@ -335,6 +338,69 @@ CREATE TABLE IF NOT EXISTS TeacherRegistrations (
 );");
 
             db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_TeacherRegistrations_UserId ON TeacherRegistrations(UserId)");
+
+            db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS BookWorkProgressItems (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ChildId INTEGER NOT NULL,
+    Category TEXT NOT NULL,
+    RequirementName TEXT NOT NULL,
+    IsCompleted INTEGER NOT NULL DEFAULT 0,
+    ProofImageUrl TEXT NULL,
+    TeacherId INTEGER NULL,
+    CompletedAt TEXT NULL,
+    FOREIGN KEY(ChildId) REFERENCES Children(Id) ON DELETE CASCADE,
+    FOREIGN KEY(TeacherId) REFERENCES Users(Id)
+);");
+
+            db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS HonorProgressItems (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ChildId INTEGER NOT NULL,
+    Category TEXT NOT NULL,
+    HonorName TEXT NOT NULL,
+    IsCompleted INTEGER NOT NULL DEFAULT 0,
+    ProofImageUrl TEXT NULL,
+    TeacherId INTEGER NULL,
+    CompletedAt TEXT NULL,
+    FOREIGN KEY(ChildId) REFERENCES Children(Id) ON DELETE CASCADE,
+    FOREIGN KEY(TeacherId) REFERENCES Users(Id)
+);");
+
+            db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_BookWorkProgressItems_Child_Category_Requirement ON BookWorkProgressItems(ChildId, Category, RequirementName)");
+            db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_HonorProgressItems_Child_Category_Honor ON HonorProgressItems(ChildId, Category, HonorName)");
+
+            db.Database.ExecuteSqlRaw(@"
+CREATE TABLE IF NOT EXISTS LockedTopics (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ChildId INTEGER NOT NULL,
+    Section TEXT NOT NULL,
+    Topic TEXT NOT NULL,
+    LockedByTeacherId INTEGER NOT NULL,
+    LockedAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    FOREIGN KEY(ChildId) REFERENCES Children(Id) ON DELETE CASCADE,
+    FOREIGN KEY(LockedByTeacherId) REFERENCES Users(Id)
+);");
+            db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_LockedTopics_Child_Section ON LockedTopics(ChildId, Section)");
+
+            db.Database.ExecuteSqlRaw(@"
+INSERT OR IGNORE INTO BookWorkProgressItems (ChildId, Category, RequirementName, IsCompleted, ProofImageUrl, TeacherId, CompletedAt)
+SELECT ChildId,
+       COALESCE(Category, ''),
+       RequirementName,
+       CASE WHEN IsCompleted = 1 AND ProofImageUrl IS NOT NULL AND TRIM(ProofImageUrl) <> '' THEN 1 ELSE 0 END,
+       ProofImageUrl,
+       TeacherId,
+       CompletedAt
+FROM ProgressItems;");
+
+            db.Database.ExecuteSqlRaw(@"
+UPDATE ProgressItems
+SET IsCompleted = 0,
+    TeacherId = NULL,
+    CompletedAt = NULL
+WHERE IsCompleted = 1
+  AND (ProofImageUrl IS NULL OR TRIM(ProofImageUrl) = '');");
         }
 
         // Seed default users if the database is empty
@@ -372,6 +438,50 @@ CREATE TABLE IF NOT EXISTS TeacherRegistrations (
                 PhotoUrl = teacherUser.PhotoUrl,
                 Status = "Pending",
             });
+        }
+
+        // Ensure each Adventurer class has at least 3 seeded students for testing/demo.
+        var parentUser = db.Users.FirstOrDefault(u => u.Role == "Parent");
+        if (parentUser == null) {
+            parentUser = new User {
+                Name = "Seed Parent",
+                Email = "seed.parent@adventurers.local",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Parent@123"),
+                Role = "Parent",
+            };
+            db.Users.Add(parentUser);
+            db.SaveChanges();
+        }
+
+        var classTargets = new[] {
+            new { Name = "Little Lamb", Prefix = "LAM", AgeYears = 6 },
+            new { Name = "Early Bird", Prefix = "EAR", AgeYears = 7 },
+            new { Name = "Busy Bee", Prefix = "BUS", AgeYears = 7 },
+            new { Name = "Sunbeam", Prefix = "SUN", AgeYears = 8 },
+            new { Name = "Builder", Prefix = "BUI", AgeYears = 9 },
+            new { Name = "Helping Hand", Prefix = "HEL", AgeYears = 9 },
+        };
+
+        foreach (var cls in classTargets) {
+            var currentCount = db.Children.Count(c => c.Class == cls.Name);
+            var toAdd = Math.Max(0, 3 - currentCount);
+            for (var i = 1; i <= toAdd; i++) {
+                var seedName = $"{cls.Name} Seed Learner {currentCount + i}";
+                var seedDoc = $"SEED-{cls.Prefix}-{currentCount + i:000}";
+                if (db.Children.Any(c => c.DocumentNumber == seedDoc))
+                    continue;
+
+                db.Children.Add(new Child {
+                    Name = seedName,
+                    DateOfBirth = DateTime.UtcNow.Date.AddYears(-cls.AgeYears),
+                    DocumentType = "ID",
+                    DocumentNumber = seedDoc,
+                    Class = cls.Name,
+                    MedicalAidInfo = "No medical aid",
+                    Status = "Approved",
+                    ParentId = parentUser.Id,
+                });
+            }
         }
 
         if (db.ChangeTracker.HasChanges())

@@ -31,10 +31,13 @@ export interface ApiChild {
   id: number;
   name: string;
   dateOfBirth: string;
+  gender?: string;  // 'Male' | 'Female'
   createdAt?: string;
   class: string;
   status: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
   adventurerCode?: string;
+  documentType?: string;
+  documentNumber?: string;
   photoUrl?: string;
   medicalAidInfo?: string;
   parentName?: string;

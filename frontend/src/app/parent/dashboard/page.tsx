@@ -6,11 +6,15 @@ import { apiFetch } from '@/lib/api';
 import Link from 'next/link';
 import { deriveComplianceIssues, type ApiChild } from '@/lib/compliance';
 
-const events = [
-  { name: 'Parents Evening', date: 'Jan 22, 2024', fee: 'Free' },
-  { name: 'Investiture Ceremony', date: 'Feb 3, 2024', fee: 'R50/child' },
-  { name: 'Camp Out', date: 'Mar 15, 2024', fee: 'R200/child' },
-];
+interface DashboardEvent {
+  id: number;
+  name: string;
+  date: string;
+  endDate?: string | null;
+  status?: 'Active' | 'Postponed' | 'Cancelled' | string;
+  costPerChild?: number | null;
+  flatCost?: number | null;
+}
 
 function getAge(dob: string) {
   const birth = new Date(dob);
@@ -23,15 +27,58 @@ function getAge(dob: string) {
 export default function ParentDashboard() {
   const { user } = useAuth();
   const [children, setChildren] = useState<ApiChild[]>([]);
+  const [events, setEvents] = useState<DashboardEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [childBookWork, setChildBookWork] = useState<Record<number, { category: string; requirementName: string; isCompleted: boolean }[]>>({});
+  const [childLockedTopics, setChildLockedTopics] = useState<Record<number, { section: string; topic: string }[]>>({});
 
   useEffect(() => {
     apiFetch('/api/children')
-      .then((data) => setChildren(data))
+      .then((data: ApiChild[]) => {
+        setChildren(data);
+        const lambChildren = (Array.isArray(data) ? data : []).filter((c) => c.class === 'Little Lamb');
+        lambChildren.forEach((c) => {
+          Promise.all([
+            apiFetch(`/api/progress/book-work/${c.id}`) as Promise<{ category: string; requirementName: string; isCompleted: boolean }[]>,
+            apiFetch(`/api/progress/locked-topics/${c.id}`) as Promise<{ section: string; topic: string }[]>,
+          ]).then(([bw, lt]) => {
+            setChildBookWork((prev) => ({ ...prev, [c.id]: Array.isArray(bw) ? bw : [] }));
+            setChildLockedTopics((prev) => ({ ...prev, [c.id]: Array.isArray(lt) ? lt : [] }));
+          }).catch(() => {});
+        });
+      })
       .catch((err) => setError(err?.message ?? 'Failed to load children'))
       .finally(() => setLoading(false));
+
+    apiFetch('/api/events')
+      .then((data: DashboardEvent[]) => {
+        setEvents(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        setEvents([]);
+      });
   }, []);
+
+  const formatEventDate = (start: string, end?: string | null) => {
+    const startDate = new Date(start);
+    if (Number.isNaN(startDate.getTime())) return 'Date TBC';
+
+    const startLabel = startDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!end) return startLabel;
+
+    const endDate = new Date(end);
+    if (Number.isNaN(endDate.getTime())) return startLabel;
+
+    const endLabel = endDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
+  };
+
+  const formatEventFee = (ev: DashboardEvent) => {
+    if (typeof ev.flatCost === 'number') return `R${ev.flatCost.toFixed(2)} flat`;
+    if (typeof ev.costPerChild === 'number') return `R${ev.costPerChild.toFixed(2)}/child`;
+    return 'Free';
+  };
 
   const actionItems = children.flatMap((child) => {
     const issues = deriveComplianceIssues(child);
@@ -58,7 +105,7 @@ export default function ParentDashboard() {
   const hasUnpaidChildren = !loading && !error && children.length > 0 && unpaidChildren.length > 0;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="px-3 py-4 sm:p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Parent Dashboard</h1>
         <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name ?? 'Parent'}</p>
@@ -99,7 +146,7 @@ export default function ParentDashboard() {
 
       {!loading && !error && actionItems.length > 0 && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
             <h2 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Action Required</h2>
             <span className="text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-800">
               {actionItems.length} item{actionItems.length === 1 ? '' : 's'}
@@ -229,6 +276,68 @@ export default function ParentDashboard() {
         )}
       </div>
 
+      {/* Little Lamb Progress */}
+      {!loading && !error && children.some((c) => c.class === 'Little Lamb') && (
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-gray-700 mb-3">Little Lamb Checklist Progress</h2>
+          {children.filter((c) => c.class === 'Little Lamb').map((c) => {
+            const bw = childBookWork[c.id] ?? [];
+            const locked = childLockedTopics[c.id] ?? [];
+            const sections = ['Basic Requirements', 'My God', 'My Self', 'My Family', 'My World'];
+            return (
+              <div key={c.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
+                <h3 className="text-sm font-bold text-gray-800 mb-3">{c.name}</h3>
+                <div className="space-y-3">
+                  {sections.map((section) => {
+                    if (section === 'Basic Requirements') {
+                      const basicItems = [
+                        'Recite the Adventurer Pledge',
+                        'Complete the Story Listening I award',
+                        'Complete the Woolly Lamb award',
+                      ];
+                      return (
+                        <div key={section}>
+                          <p className="text-xs font-bold text-[#1e8fbf] mb-1">{section}</p>
+                          <div className="space-y-1 pl-2">
+                            {basicItems.map((item) => {
+                              const completed = bw.some((p) => p.category === section && p.requirementName === item && p.isCompleted);
+                              return (
+                                <div key={item} className="flex items-center gap-2">
+                                  <span className={`text-sm ${completed ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {completed ? '✅' : '○'}
+                                  </span>
+                                  <span className={`text-xs ${completed ? 'text-gray-700 font-medium' : 'text-gray-400'}`}>{item}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+                    const lockedEntry = locked.find((l) => l.section === section);
+                    const completedEntry = bw.find((p) => p.category === section && p.isCompleted);
+                    if (!lockedEntry && !completedEntry) return null;
+                    const topicName = completedEntry?.requirementName ?? lockedEntry?.topic ?? '';
+                    const isCompleted = Boolean(completedEntry);
+                    return (
+                      <div key={section} className="flex items-start gap-2">
+                        <span className={`text-sm mt-0.5 ${isCompleted ? 'text-green-600' : 'text-amber-500'}`}>
+                          {isCompleted ? '✅' : '🔒'}
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-[#1e8fbf]">{section}</p>
+                          <p className={`text-xs ${isCompleted ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>{topicName}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Upcoming Events */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -239,16 +348,25 @@ export default function ParentDashboard() {
               <p className="text-sm font-semibold text-gray-500">Locked</p>
               <p className="text-xs text-gray-400">Pay your registration fee to access events.</p>
             </div>
+          ) : events.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
+              <span className="text-2xl">📅</span>
+              <p className="text-sm font-semibold text-gray-500">No events added yet</p>
+              <p className="text-xs text-gray-400">Directors can now add events and they will appear here.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {events.map((e) => (
-                <div key={e.name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 border-b border-gray-50 last:border-0">
                   <div>
                     <p className="text-sm font-medium text-gray-800">{e.name}</p>
-                    <p className="text-xs text-gray-400">{e.date}</p>
+                    <p className="text-xs text-gray-400">{formatEventDate(e.date, e.endDate)}</p>
+                    {e.status && e.status !== 'Active' && (
+                      <p className="text-[11px] font-semibold text-amber-700 mt-0.5">Status: {e.status}</p>
+                    )}
                   </div>
-                  <span className="text-xs font-semibold text-[#1e3a5f] bg-blue-50 px-2 py-1 rounded-full">
-                    {e.fee}
+                  <span className="text-xs font-semibold text-[#1e3a5f] bg-blue-50 px-2 py-1 rounded-full self-start sm:self-auto">
+                    {formatEventFee(e)}
                   </span>
                 </div>
               ))}

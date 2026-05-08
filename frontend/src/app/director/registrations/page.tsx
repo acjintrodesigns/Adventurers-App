@@ -33,7 +33,7 @@ export default function DirectorRegistrationsPage() {
 
   const pendingChildren = useMemo(
     () => children
-      .filter((child) => child.status === 'Pending')
+      .filter((child) => child.status !== 'Paid')
       .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()),
     [children],
   );
@@ -96,18 +96,18 @@ export default function DirectorRegistrationsPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-5 flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pending Registrations</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Pending Registrations (Unpaid)</p>
           <p className="text-3xl font-bold text-[#1e3a5f] mt-1">{loading ? '...' : pendingChildren.length}</p>
         </div>
-        <span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Action Queue</span>
+        <span className="text-xs font-semibold bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Unpaid Queue</span>
       </div>
 
       {loading ? (
         <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-500">Loading registrations...</div>
       ) : pendingChildren.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
-          <p className="text-lg font-semibold text-gray-700">No pending registrations</p>
-          <p className="text-sm text-gray-500 mt-1">All caught up. New submissions will appear here.</p>
+          <p className="text-lg font-semibold text-gray-700">No unpaid registrations</p>
+          <p className="text-sm text-gray-500 mt-1">All children are currently paid.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -131,26 +131,39 @@ export default function DirectorRegistrationsPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                  child.status === 'Pending'
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : child.status === 'Approved'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                }`}>
+                  {child.status}
+                </span>
                 <Link
                   href={`/director/children/${child.id}`}
                   className="text-xs text-[#1e3a5f] font-medium hover:underline"
                 >
                   Open Profile
                 </Link>
-                <button
-                  onClick={() => updateStatus(child, 'Approved')}
-                  disabled={actioningId === child.id}
-                  className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  {actioningId === child.id ? '...' : 'Approve'}
-                </button>
-                <button
-                  onClick={() => updateStatus(child, 'Rejected')}
-                  disabled={actioningId === child.id}
-                  className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors"
-                >
-                  {actioningId === child.id ? '...' : 'Reject'}
-                </button>
+                {child.status === 'Pending' && (
+                  <>
+                    <button
+                      onClick={() => updateStatus(child, 'Approved')}
+                      disabled={actioningId === child.id}
+                      className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {actioningId === child.id ? '...' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => updateStatus(child, 'Rejected')}
+                      disabled={actioningId === child.id}
+                      className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors"
+                    >
+                      {actioningId === child.id ? '...' : 'Reject'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

@@ -1187,6 +1187,7 @@ export default function RegisterChildPage() {
             class: cls?.name ?? child.selectedClass,
             documentType: child.idType === 'passport' ? 'Passport' : 'ID',
             documentNumber: child.idNumber.trim(),
+            gender: child.gender || null,
             medicalAidInfo: [medicalAidInfo, extraHealth].filter(Boolean).join(' || ') || null,
             photoUrl,
           }),

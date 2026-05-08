@@ -38,6 +38,22 @@ class FaceQualityResult(BaseModel):
     pose_ready: bool
     message: str
 
+
+class ProgressAnalysisRequest(BaseModel):
+    items_completed: int
+    items_total: int
+    commencement_date: str  # ISO format: YYYY-MM-DD
+    completion_date: str    # ISO format: YYYY-MM-DD
+    current_date: str       # ISO format: YYYY-MM-DD
+
+
+class ProgressAnalysisResult(BaseModel):
+    status: str  # "ahead" | "on-track" | "behind"
+    percentage_expected: float
+    percentage_actual: float
+    days_remaining: int
+    message: str
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "Adventurers AI Service"}
@@ -233,3 +249,89 @@ async def score_progress(data: dict):
         "grade": grade,
         "category_breakdown": category_scores
     }
+
+
+@app.post("/analyze-progress", response_model=ProgressAnalysisResult)
+async def analyze_progress(payload: ProgressAnalysisRequest):
+    """
+    Analyze child progress against timeline to determine if on-track, ahead, or behind.
+    
+    Timeline logic:
+    - Calculate days elapsed since commencement
+    - Calculate total days available for completion
+    - Determine expected completion % for current date
+    - Compare actual % to expected % to determine status
+    """
+    try:
+        from datetime import datetime
+        
+        # Parse dates
+        commencement = datetime.fromisoformat(payload.commencement_date)
+        completion = datetime.fromisoformat(payload.completion_date)
+        current = datetime.fromisoformat(payload.current_date)
+        
+        # Calculate timeline
+        total_days = (completion - commencement).days
+        days_elapsed = (current - commencement).days
+        days_remaining = (completion - current).days
+        
+        # Handle edge cases
+        if total_days <= 0:
+            return ProgressAnalysisResult(
+                status="on-track",
+                percentage_expected=100.0,
+                percentage_actual=0.0,
+                days_remaining=0,
+                message="Invalid timeline (completion before commencement)"
+            )
+        
+        if days_elapsed < 0:
+            return ProgressAnalysisResult(
+                status="on-track",
+                percentage_expected=0.0,
+                percentage_actual=0.0,
+                days_remaining=total_days,
+                message="Timeline has not started yet"
+            )
+        
+        if days_elapsed > total_days:
+            return ProgressAnalysisResult(
+                status="on-track" if payload.items_completed == payload.items_total else "behind",
+                percentage_expected=100.0,
+                percentage_actual=round((payload.items_completed / max(payload.items_total, 1)) * 100, 2),
+                days_remaining=0,
+                message="Timeline has ended"
+            )
+        
+        # Calculate expected completion % for current date
+        percentage_expected = (days_elapsed / total_days) * 100
+        percentage_actual = (payload.items_completed / max(payload.items_total, 1)) * 100
+        
+        # Determine status based on threshold
+        # Ahead: actual >= expected + 10%
+        # On-track: actual >= expected - 5% and < expected + 10%
+        # Behind: actual < expected - 5%
+        difference = percentage_actual - percentage_expected
+        
+        if difference >= 10:
+            status = "ahead"
+            message = f"Great progress! {payload.items_completed}/{payload.items_total} items completed ({percentage_actual:.0f}%)"
+        elif difference >= -5:
+            status = "on-track"
+            message = f"On track: {payload.items_completed}/{payload.items_total} items completed ({percentage_actual:.0f}%)"
+        else:
+            status = "behind"
+            message = f"Needs attention: {payload.items_completed}/{payload.items_total} items completed ({percentage_actual:.0f}%)"
+        
+        return ProgressAnalysisResult(
+            status=status,
+            percentage_expected=round(percentage_expected, 2),
+            percentage_actual=round(percentage_actual, 2),
+            days_remaining=max(days_remaining, 0),
+            message=message
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing progress: {str(e)}")

@@ -31,11 +31,21 @@ const statusColors: Record<string, string> = {
 export default function DirectorDashboard() {
   const { user } = useAuth();
   const [children, setChildren] = useState<ApiChild[]>([]);
+  const [childrenLoading, setChildrenLoading] = useState(true);
+  const [childrenError, setChildrenError] = useState<string | null>(null);
 
-  const loadChildren = () => {
-    apiFetch('/api/children')
-      .then((data: ApiChild[]) => setChildren(Array.isArray(data) ? data : []))
-      .catch(() => setChildren([]));
+  const loadChildren = async () => {
+    setChildrenLoading(true);
+    setChildrenError(null);
+    try {
+      const data = await apiFetch('/api/children') as ApiChild[];
+      setChildren(Array.isArray(data) ? data : []);
+    } catch {
+      setChildren([]);
+      setChildrenError('Could not load compliance data right now.');
+    } finally {
+      setChildrenLoading(false);
+    }
   };
 
   useEffect(() => { loadChildren(); }, []);
@@ -52,14 +62,33 @@ export default function DirectorDashboard() {
     }))
     .filter((child) => child.issues.length > 0);
 
+  const complianceByClass = Object.values(
+    complianceAlerts.reduce((groups, child) => {
+      const className = child.class || 'Unassigned';
+      if (!groups[className]) {
+        groups[className] = {
+          className,
+          children: [] as typeof complianceAlerts,
+          totalIssues: 0,
+        };
+      }
+
+      groups[className].children.push(child);
+      groups[className].totalIssues += child.issues.length;
+      return groups;
+    }, {} as Record<string, { className: string; children: typeof complianceAlerts; totalIssues: number }>),
+  ).sort((a, b) => a.className.localeCompare(b.className));
+
+  const totalComplianceIssues = complianceAlerts.reduce((total, child) => total + child.issues.length, 0);
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="px-3 py-4 sm:p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Director Dashboard</h1>
         <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name ?? 'Director'}</p>
       </div>
 
-      <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-5 mb-8 flex items-center justify-between gap-4">
+      <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-5 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-bold text-yellow-900 uppercase tracking-wide">Pending Registrations</h2>
           <p className="text-xs text-yellow-700 mt-1">Registrations have moved to a dedicated page for cleaner review and actioning.</p>
@@ -77,36 +106,71 @@ export default function DirectorDashboard() {
         </div>
       </div>
 
-      {complianceAlerts.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-red-900 uppercase tracking-wide">Compliance Alerts</h2>
-            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full">
-              {complianceAlerts.length} children with issues
-            </span>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-5 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-red-900 uppercase tracking-wide">Compliance Alerts</h2>
+          <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full">
+            {totalComplianceIssues} issues across {complianceAlerts.length} children
+          </span>
+        </div>
+
+        {childrenLoading ? (
+          <p className="text-sm text-gray-500">Loading compliance data...</p>
+        ) : childrenError ? (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-red-700">{childrenError}</p>
+            <button
+              type="button"
+              onClick={() => { void loadChildren(); }}
+              className="text-xs font-semibold bg-white text-[#1e3a5f] border border-red-200 px-3 py-1.5 rounded-md hover:bg-red-50 transition-colors self-start"
+            >
+              Retry
+            </button>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {complianceAlerts.map((child) => (
-              <div key={child.id} className="bg-white rounded-lg border border-red-100 p-3">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{child.name}</p>
-                    <p className="text-xs text-gray-400">{child.class} · Parent: {child.parentName || 'Parent'}</p>
+        ) : complianceAlerts.length === 0 ? (
+          <p className="text-sm text-gray-600">No compliance issues detected at the moment.</p>
+        ) : (
+          <div className="space-y-3">
+            {complianceByClass.map((group) => (
+              <details key={group.className} className="bg-white rounded-lg border border-red-100 open:shadow-sm">
+                <summary className="list-none cursor-pointer px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm font-semibold text-gray-800 truncate">{group.className}</span>
+                    <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-full whitespace-nowrap">
+                      {group.totalIssues} issues
+                    </span>
+                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                      {group.children.length} child{group.children.length === 1 ? '' : 'ren'}
+                    </span>
                   </div>
-                  <Link href={`/director/children/${child.id}`} className="text-xs text-[#1e3a5f] font-semibold hover:underline whitespace-nowrap">
-                    Open Profile
-                  </Link>
-                </div>
-                <ul className="space-y-1">
-                  {child.issues.map((issue, idx) => (
-                    <li key={idx} className="text-xs text-gray-600">• {issue.message}</li>
+                  <span className="text-xs text-[#1e3a5f] font-semibold self-start sm:self-auto">Open</span>
+                </summary>
+
+                <div className="px-4 pb-4 grid grid-cols-1 lg:grid-cols-2 gap-3 border-t border-red-50">
+                  {group.children.map((child) => (
+                    <div key={child.id} className="mt-3 bg-red-50/40 rounded-lg border border-red-100 p-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-2">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{child.name}</p>
+                          <p className="text-xs text-gray-400">{child.class} · Parent: {child.parentName || 'Parent'}</p>
+                        </div>
+                        <Link href={`/director/children/${child.id}`} className="text-xs text-[#1e3a5f] font-semibold hover:underline whitespace-nowrap">
+                          Open Profile
+                        </Link>
+                      </div>
+                      <ul className="space-y-1">
+                        {child.issues.map((issue, idx) => (
+                          <li key={idx} className="text-xs text-gray-600">• {issue.message}</li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
-              </div>
+                </div>
+              </details>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -222,7 +286,7 @@ export default function DirectorDashboard() {
               <p className="text-sm text-gray-400 text-center py-4">No registrations yet.</p>
             ) : (
               recentChildren.map((r) => (
-                <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 border-b border-gray-50 last:border-0">
                   <div>
                     <p className="text-sm font-medium text-gray-800">{r.name}</p>
                     <p className="text-xs text-gray-400">
@@ -230,7 +294,7 @@ export default function DirectorDashboard() {
                       {r.createdAt ? ` · ${new Date(r.createdAt).toLocaleDateString('en-ZA')}` : ''}
                     </p>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColors[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full self-start sm:self-auto ${statusColors[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
                     {r.status}
                   </span>
                 </div>

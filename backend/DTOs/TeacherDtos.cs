@@ -3,6 +3,7 @@ namespace AdventurersApi.DTOs;
 public record UpsertTeacherRegistrationDto(
     string FullName,
     DateTime? DateOfBirth,
+    string? Gender,
     string DocumentType,
     string? DocumentNumber,
     string? Phone,

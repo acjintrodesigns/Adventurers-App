@@ -24,9 +24,41 @@ public class ChatController : ControllerBase {
     private int GetUserId() =>
         int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    private string GetUserRole() =>
+        User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+    private async Task<string?> GetAssignedClassAsync(int teacherUserId) =>
+        await _db.TeacherRegistrations
+            .AsNoTracking()
+            .Where(reg => reg.UserId == teacherUserId)
+            .Select(reg => reg.AssignedClass)
+            .FirstOrDefaultAsync();
+
+    private async Task<bool> CanAccessClassRoomAsync(string classRoom, int userId, string role) {
+        if (!string.Equals(role, "Teacher", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(classRoom, "General", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var assignedClass = await GetAssignedClassAsync(userId);
+        if (string.IsNullOrWhiteSpace(assignedClass))
+            return false;
+
+        return string.Equals(classRoom, assignedClass, StringComparison.OrdinalIgnoreCase);
+    }
+
     // GET /api/chat/{classRoom}/messages
     [HttpGet("{classRoom}/messages")]
     public async Task<IActionResult> GetMessages(string classRoom, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) {
+        var userId = GetUserId();
+        var role = GetUserRole();
+        if (!await CanAccessClassRoomAsync(classRoom, userId, role))
+            return Forbid();
+
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var messages = await _db.ChatMessages
             .Include(m => m.Sender)
             .Where(m => m.ClassRoom == classRoom)
@@ -47,10 +79,16 @@ public class ChatController : ControllerBase {
     [HttpPost("{classRoom}/messages")]
     public async Task<IActionResult> PostMessage(string classRoom, [FromBody] SendMessageDto dto) {
         var userId = GetUserId();
+        var role = GetUserRole();
+        if (!await CanAccessClassRoomAsync(classRoom, userId, role))
+            return Forbid();
+        if (string.IsNullOrWhiteSpace(dto.Message))
+            return BadRequest(new { message = "Message is required." });
+
         var chatMessage = new ChatMessage {
             ClassRoom = classRoom,
             SenderId = userId,
-            Message = dto.Message,
+            Message = dto.Message.Trim(),
         };
         _db.ChatMessages.Add(chatMessage);
         await _db.SaveChangesAsync();

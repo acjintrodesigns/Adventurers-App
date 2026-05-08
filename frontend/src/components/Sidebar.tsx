@@ -2,13 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { apiFetch } from '@/lib/api';
 
 interface NavItem {
   label: string;
   href: string;
   icon: string;
+}
+
+interface ParentChildItem {
+  id: string | number;
+  name: string;
 }
 
 const navItems: Record<UserRole, NavItem[]> = {
@@ -21,14 +27,16 @@ const navItems: Record<UserRole, NavItem[]> = {
     { label: 'Events', href: '/director/events', icon: '📅' },
     { label: 'Payments', href: '/director/payments', icon: '💳' },
     { label: 'Payment Settings', href: '/director/payment-settings', icon: '🏦' },
+    { label: 'Registration Settings', href: '/director/registration-settings', icon: '📋' },
     { label: 'Announcements', href: '/announcements', icon: '📢' },
     { label: 'Awards', href: '/awards', icon: '🏆' },
     { label: 'Settings', href: '/settings', icon: '⚙️' },
   ],
   Teacher: [
     { label: 'Dashboard', href: '/teacher/dashboard', icon: '🏠' },
-    { label: 'My Classes', href: '/teacher/classes', icon: '📚' },
-    { label: 'Progress', href: '/teacher/progress', icon: '📊' },
+    { label: 'My Class', href: '/teacher/progress', icon: '📚' },
+    { label: 'Events', href: '/director/events', icon: '📅' },
+    { label: 'My Profile', href: '/teacher/profile', icon: '👤' },
     { label: 'Announcements', href: '/announcements', icon: '📢' },
   ],
   Parent: [
@@ -57,14 +65,64 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onCloseMobile }: SidebarProps) {
   const { user, role, logout } = useAuth();
   const pathname = usePathname();
+  const [assignedClass, setAssignedClass] = useState('');
+  const [parentChildren, setParentChildren] = useState<ParentChildItem[]>([]);
+  const [childrenMenuOpen, setChildrenMenuOpen] = useState(false);
 
   useEffect(() => {
     onCloseMobile();
   }, [pathname, onCloseMobile]);
 
+  useEffect(() => {
+    if (role !== 'Teacher') return;
+
+    const loadAssignedClass = async () => {
+      try {
+        const data = await apiFetch('/api/teachers/my-class') as { assignedClass?: string | null };
+        setAssignedClass(data.assignedClass?.trim() ?? '');
+      } catch {
+        setAssignedClass('');
+      }
+    };
+
+    void loadAssignedClass();
+  }, [role]);
+
+  useEffect(() => {
+    if (role !== 'Parent') {
+      setParentChildren([]);
+      return;
+    }
+
+    const loadChildren = async () => {
+      try {
+        const data = await apiFetch('/api/children') as ParentChildItem[];
+        setParentChildren(Array.isArray(data) ? data : []);
+      } catch {
+        setParentChildren([]);
+      }
+    };
+
+    void loadChildren();
+  }, [role]);
+
+  useEffect(() => {
+    if (role === 'Parent' && pathname.startsWith('/parent/my-children')) {
+      setChildrenMenuOpen(true);
+    }
+  }, [role, pathname]);
+
   if (!role) return null;
 
-  const items = navItems[role] ?? [];
+  const items = (navItems[role] ?? []).map((item) => {
+    if (role === 'Teacher' && item.href === '/teacher/progress') {
+      return {
+        ...item,
+        label: assignedClass ? `${assignedClass} Class` : 'My Class',
+      };
+    }
+    return item;
+  });
 
   return (
     <>
@@ -113,6 +171,53 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
           <ul className="space-y-1">
             {items.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isMyChildren = role === 'Parent' && item.href === '/parent/my-children';
+
+              if (isMyChildren && !collapsed) {
+                return (
+                  <li key={`${item.href}-${item.label}`}>
+                    <button
+                      type="button"
+                      onClick={() => setChildrenMenuOpen((prev) => !prev)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-yellow-400 text-[#1e3a5f]'
+                          : 'text-blue-100 hover:bg-[#2a4f7c] hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="text-base">{item.icon}</span>
+                        {item.label}
+                      </span>
+                      <span className={`text-xs transition-transform ${childrenMenuOpen ? 'rotate-180' : ''}`}>▼</span>
+                    </button>
+                    {childrenMenuOpen && (
+                      <ul className="mt-1 ml-6 space-y-1 border-l border-[#3a5f8c] pl-3">
+                        <li>
+                          <Link
+                            href="/parent/my-children"
+                            className="block px-2 py-1.5 rounded text-xs text-blue-200 hover:text-white hover:bg-[#2a4f7c] transition-colors"
+                          >
+                            View all children
+                          </Link>
+                        </li>
+                        {parentChildren.map((child) => (
+                          <li key={`child-nav-${child.id}`}>
+                            <Link
+                              href={`/parent/my-children#child-${child.id}`}
+                              className="block px-2 py-1.5 rounded text-xs text-blue-200 hover:text-white hover:bg-[#2a4f7c] transition-colors truncate"
+                              title={child.name}
+                            >
+                              {child.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              }
+
               return (
                 <li key={`${item.href}-${item.label}`}>
                   <Link
@@ -197,6 +302,55 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
               <ul className="space-y-2">
                 {items.map((item) => {
                   const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  const isMyChildren = role === 'Parent' && item.href === '/parent/my-children';
+
+                  if (isMyChildren) {
+                    return (
+                      <li key={`${item.href}-${item.label}`}>
+                        <button
+                          type="button"
+                          onClick={() => setChildrenMenuOpen((prev) => !prev)}
+                          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-yellow-400 text-[#1e3a5f]'
+                              : 'text-blue-100 hover:bg-[#2a4f7c] hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-3">
+                            <span className="text-base">{item.icon}</span>
+                            {item.label}
+                          </span>
+                          <span className={`text-xs transition-transform ${childrenMenuOpen ? 'rotate-180' : ''}`}>▼</span>
+                        </button>
+                        {childrenMenuOpen && (
+                          <ul className="mt-1 ml-5 space-y-1 border-l border-[#3a5f8c] pl-3">
+                            <li>
+                              <Link
+                                href="/parent/my-children"
+                                onClick={onCloseMobile}
+                                className="block px-2 py-2 rounded text-xs text-blue-200 hover:text-white hover:bg-[#2a4f7c] transition-colors"
+                              >
+                                View all children
+                              </Link>
+                            </li>
+                            {parentChildren.map((child) => (
+                              <li key={`child-nav-mobile-${child.id}`}>
+                                <Link
+                                  href={`/parent/my-children#child-${child.id}`}
+                                  onClick={onCloseMobile}
+                                  className="block px-2 py-2 rounded text-xs text-blue-200 hover:text-white hover:bg-[#2a4f7c] transition-colors truncate"
+                                  title={child.name}
+                                >
+                                  {child.name}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  }
+
                   return (
                     <li key={`${item.href}-${item.label}`}>
                       <Link

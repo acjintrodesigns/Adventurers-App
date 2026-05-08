@@ -12,6 +12,23 @@ const statusColors: Record<string, string> = {
   Paid: 'bg-blue-100 text-blue-700',
 };
 
+function parseMedicalInfo(raw?: string | null) {
+  if (!raw || raw.trim().toLowerCase() === 'no medical aid') return null;
+  const [aidPart = '', extraPart = ''] = raw.split('||').map((s) => s.trim());
+  const aidPieces = aidPart.split('|').map((s) => s.trim()).filter(Boolean);
+  const [coverType, aidName, aidPlan, aidNumber] = aidPieces;
+  const extraFields: Record<string, string> = {};
+  extraPart.split('|').forEach((seg) => {
+    const colon = seg.indexOf(':');
+    if (colon > -1) {
+      const key = seg.slice(0, colon).trim();
+      const val = seg.slice(colon + 1).trim();
+      if (key && val) extraFields[key] = val;
+    }
+  });
+  return { coverType, aidName, aidPlan, aidNumber, ...extraFields };
+}
+
 function DemeritBadge({ count }: { count: number }) {
   if (count === 0) return null;
   const danger = count >= 5;
@@ -37,7 +54,6 @@ export default function DirectorChildrenPage() {
   const [actioningId, setActioningId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Paid'>('All');
 
   const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5009';
 
@@ -86,34 +102,23 @@ export default function DirectorChildrenPage() {
     }
   };
 
-  const displayed = filter === 'All' ? children : children.filter((c) => c.status === filter);
-
-  const pendingCount = children.filter((c) => c.status === 'Pending').length;
+  const paidChildren = children.filter((c) => c.status === 'Paid');
+  const unpaidCount = children.length - paidChildren.length;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">
           Children Management
-          {pendingCount > 0 && (
+          {unpaidCount > 0 && (
             <span className="ml-3 text-sm font-semibold bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
-              {pendingCount} pending
+              {unpaidCount} unpaid moved to Registrations
             </span>
           )}
         </h1>
-        <div className="flex gap-1">
-          {(['All', 'Pending', 'Approved', 'Rejected', 'Paid'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                filter === f ? 'bg-[#1e3a5f] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full">
+          Paid only ({paidChildren.length})
+        </span>
       </div>
 
       {error && (
@@ -129,16 +134,16 @@ export default function DirectorChildrenPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-700">
-                {filter === 'All' ? `All Children (${children.length})` : `${filter} (${displayed.length})`}
+                Paid Children ({paidChildren.length})
               </h2>
             </div>
             <div className="divide-y divide-gray-50">
               {loading ? (
                 <div className="px-6 py-8 text-center text-gray-400 text-sm">Loading children...</div>
-              ) : displayed.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-400 text-sm">No children found.</div>
+              ) : paidChildren.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-400 text-sm">No paid children yet. Unpaid children are listed on Registrations.</div>
               ) : (
-                displayed.map((child) => {
+                paidChildren.map((child) => {
                   const demeritCount = child.demeritCount ?? 0;
                   return (
                     <div
@@ -154,11 +159,6 @@ export default function DirectorChildrenPage() {
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-gray-800">{child.name}</p>
                             <DemeritBadge count={demeritCount} />
-                            {child.status !== 'Paid' && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 uppercase tracking-wide">
-                                Unpaid
-                              </span>
-                            )}
                           </div>
                           <p className="text-xs text-gray-400">{child.class} · {child.parentName ?? 'Unknown parent'}</p>
                         </div>
@@ -167,24 +167,16 @@ export default function DirectorChildrenPage() {
                         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColors[child.status] ?? ''}`}>
                           {child.status}
                         </span>
-                        {child.status === 'Pending' && (
-                          <>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); updateStatus(child, 'Approved'); }}
-                              disabled={actioningId === child.id}
-                              className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); updateStatus(child, 'Rejected'); }}
-                              disabled={actioningId === child.id}
-                              className="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 disabled:opacity-50"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/director/children/${child.id}`);
+                          }}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e3a5f] text-white hover:bg-[#2a4f7c] transition-colors"
+                        >
+                          View Profile
+                        </button>
                       </div>
                     </div>
                   );
@@ -197,83 +189,133 @@ export default function DirectorChildrenPage() {
         {/* Detail Panel */}
         <div>
           {selected ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-              <div className="flex flex-col items-center mb-5">
-                <div className="w-20 h-20 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white font-bold text-3xl mb-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {/* Avatar + name hero */}
+              <div className="bg-[#1e3a5f] px-6 py-5 flex flex-col items-center text-white">
+                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center font-bold text-2xl mb-2">
                   {selected.name.charAt(0)}
                 </div>
-                <h3 className="text-lg font-bold text-gray-800">{selected.name}</h3>
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full mt-1 ${statusColors[selected.status] ?? ''}`}>
+                <h3 className="text-base font-bold text-center">{selected.name}</h3>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-2 ${statusColors[selected.status] ?? 'bg-gray-100 text-gray-600'}`}>
                   {selected.status}
                 </span>
               </div>
 
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Date of Birth</span>
-                  <span className="font-medium">
-                    {selected.dateOfBirth ? new Date(selected.dateOfBirth).toLocaleDateString() : '—'}
-                  </span>
+              <div className="p-5 space-y-4">
+                {/* Quick facts grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Date of Birth</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {selected.dateOfBirth ? new Date(selected.dateOfBirth).toLocaleDateString('en-ZA') : '—'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Class</p>
+                    <p className="text-sm font-medium text-gray-800">{selected.class || '—'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Parent</p>
+                    <p className="text-sm font-medium text-gray-800">{selected.parentName ?? '—'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Indemnity</p>
+                    <p className={`text-sm font-semibold ${selected.indemnitySigned ? 'text-green-600' : 'text-red-500'}`}>
+                      {selected.indemnitySigned ? '✓ Signed' : '✗ Not signed'}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Class</span>
-                  <span className="font-medium">{selected.class}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Medical Aid</span>
-                  <span className="font-medium">{selected.medicalAidInfo || 'None'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Parent</span>
-                  <span className="font-medium">{selected.parentName ?? '—'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Indemnity</span>
-                  <span className={`font-medium ${selected.indemnitySigned ? 'text-green-600' : 'text-red-500'}`}>
-                    {selected.indemnitySigned ? 'Signed' : 'Not signed'}
-                  </span>
-                </div>
+
+                {/* Medical Aid — parsed */}
+                {(() => {
+                  const med = parseMedicalInfo(selected.medicalAidInfo);
+                  if (!med && !selected.medicalAidInfo) return (
+                    <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Medical Information</p>
+                      <p className="text-sm text-gray-400 italic">None recorded</p>
+                    </div>
+                  );
+                  if (!med) return (
+                    <div className="bg-gray-50 rounded-lg px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Medical Information</p>
+                      <p className="text-sm text-gray-800">{selected.medicalAidInfo}</p>
+                    </div>
+                  );
+                  const { coverType, aidName, aidPlan, aidNumber, ...extras } = med;
+                  return (
+                    <div className="bg-blue-50 rounded-lg px-3 py-3 space-y-2">
+                      <p className="text-[10px] uppercase tracking-wide text-blue-400 font-semibold">Medical Aid</p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                        {coverType && (
+                          <div>
+                            <p className="text-[10px] text-gray-400">Type</p>
+                            <p className="text-sm font-medium text-gray-800">{coverType}</p>
+                          </div>
+                        )}
+                        {aidName && (
+                          <div>
+                            <p className="text-[10px] text-gray-400">Provider</p>
+                            <p className="text-sm font-medium text-gray-800 capitalize">{aidName}</p>
+                          </div>
+                        )}
+                        {aidPlan && (
+                          <div>
+                            <p className="text-[10px] text-gray-400">Plan</p>
+                            <p className="text-sm font-medium text-gray-800 capitalize">{aidPlan}</p>
+                          </div>
+                        )}
+                        {aidNumber && (
+                          <div>
+                            <p className="text-[10px] text-gray-400">Number</p>
+                            <p className="text-sm font-medium text-gray-800">{aidNumber}</p>
+                          </div>
+                        )}
+                      </div>
+                      {Object.keys(extras).length > 0 && (
+                        <div className="pt-2 border-t border-blue-100 space-y-1.5">
+                          {Object.entries(extras).map(([k, v]) => (
+                            <div key={k}>
+                              <p className="text-[10px] text-gray-400">{k}</p>
+                              <p className="text-sm font-medium text-gray-800">{v}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Demerits */}
                 {(selected.demeritCount ?? 0) > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500">Active Demerits</span>
+                  <div className={`rounded-lg px-3 py-2.5 ${(selected.demeritCount ?? 0) >= 5 ? 'bg-red-50' : 'bg-orange-50'}`}>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Active Demerits</p>
                     <DemeritBadge count={selected.demeritCount ?? 0} />
+                    {selected.isDelistedFromCamps && (
+                      <p className="text-xs text-red-600 font-semibold mt-1">Camp payments blocked</p>
+                    )}
                   </div>
                 )}
-                {selected.isDelistedFromCamps && (
-                  <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 text-center font-semibold">
-                    Camp payments blocked
+
+                {/* Actions */}
+                {selected.status === 'Pending' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => updateStatus(selected, 'Approved')}
+                      disabled={actioningId === selected.id}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => updateStatus(selected, 'Rejected')}
+                      disabled={actioningId === selected.id}
+                      className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors"
+                    >
+                      Reject
+                    </button>
                   </div>
                 )}
               </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/director/children/${selected.id}`)}
-                  className="w-full bg-[#1e3a5f] text-white py-2 rounded-lg text-sm font-semibold hover:bg-[#2a4f7c]"
-                >
-                  View Profile & Manage Demerits
-                </button>
-              </div>
-
-              {selected.status === 'Pending' && (
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => updateStatus(selected, 'Approved')}
-                    disabled={actioningId === selected.id}
-                    className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => updateStatus(selected, 'Rejected')}
-                    disabled={actioningId === selected.id}
-                    className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
             </div>
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center text-gray-400">
